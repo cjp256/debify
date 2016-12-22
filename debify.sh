@@ -13,14 +13,13 @@
 # limitations under the License.
 
 set -e
+set -x
 
 if [ ! -d /debs ]
 then
     echo "Mount your Debian package directory to /debs."
     exit 1
 fi
-
-APTLY_REPO_NAME=debify
 
 aptly repo create \
     -component="$APTLY_COMPONENT" \
@@ -42,6 +41,7 @@ fi
 aptly publish repo \
     -architectures="$APTLY_ARCHITECTURES" \
     -passphrase="$passphrase" \
+    -gpg-key="$GPG_SIGNING_KEY_ID" \
     $APTLY_REPO_NAME
 
 mv ~/.aptly/public /repo
@@ -49,6 +49,7 @@ mv ~/.aptly/public /repo
 if [ ! -z "$KEYSERVER" ] && [ ! -z "$URI" ]
 then
     release_sig_path=$(find /repo/dists -name Release.gpg | head -1) 
+
     gpg_key_id=$(gpg --list-packets $release_sig_path | grep -oP "(?<=keyid ).+")
 
     echo "# setup script for $URI" > /repo/go
@@ -65,9 +66,10 @@ END
     esac
 
     cat >> /repo/go <<-END
+set -e
+set -x
 apt-key adv --keyserver $KEYSERVER --recv-keys $gpg_key_id
-echo "deb $URI $APTLY_DISTRIBUTION $APTLY_COMPONENT" >> /etc/apt/sources.list
-
+echo "deb $URI $APTLY_DISTRIBUTION $APTLY_COMPONENT" > /etc/apt/sources.list.d/$APTLY_REPO_NAME.list
 apt-get update
 END
 fi
